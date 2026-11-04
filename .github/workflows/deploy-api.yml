@@ -1,0 +1,33 @@
+name: Deploy API to VPS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "deploy/**"
+      - ".github/workflows/deploy-api.yml"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pull and restart Nest on VPS
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: 22
+          script_stop: true
+          script: |
+            set -euo pipefail
+            cd /opt/stroycrm
+            git fetch origin main
+            git reset --hard origin/main
+            cd backend
+            npm ci --include=dev
+            npm run build
+            systemctl restart stroycrm-api
+            sleep 2
+            curl -fsS http://127.0.0.1:3001/api/health
