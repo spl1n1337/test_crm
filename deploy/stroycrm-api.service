@@ -6,7 +6,8 @@ After=network.target
 Type=simple
 WorkingDirectory=/opt/stroycrm/backend
 Environment=NODE_ENV=production
-ExecStart=/usr/bin/node dist/main
+EnvironmentFile=-/opt/stroycrm/backend/.env
+ExecStart=/usr/bin/node dist/main.js
 Restart=always
 RestartSec=3
 User=root

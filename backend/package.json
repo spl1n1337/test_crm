@@ -4,7 +4,7 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "build": "npx nest build",
+    "build": "rm -rf dist tsconfig.build.tsbuildinfo && npx nest build",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:prod": "node dist/main",
