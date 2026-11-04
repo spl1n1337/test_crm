@@ -22,27 +22,33 @@ export function RegisterForm() {
 
   async function onSubmit(values: RegisterInput) {
     setSubmitting(true);
-    const response = await fetch("/api/auth/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(values),
-    });
-    const payload = (await response.json()) as {
-      error?: string;
-      mocked?: boolean;
-      confirmUrl?: string;
-    };
-    setSubmitting(false);
-    if (!response.ok) {
-      toast.error(payload.error ?? "Не удалось зарегистрироваться");
-      return;
-    }
-    setDone(true);
-    if (payload.mocked && payload.confirmUrl) {
-      setDevLink(payload.confirmUrl);
-      toast.message("SMTP не настроен — используйте ссылку на экране");
-    } else {
-      toast.success("Письмо отправлено. Проверьте почту.");
+    try {
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
+        signal: AbortSignal.timeout(20_000),
+      });
+      const payload = (await response.json()) as {
+        error?: string;
+        mocked?: boolean;
+        confirmUrl?: string;
+      };
+      if (!response.ok) {
+        toast.error(payload.error ?? "Не удалось зарегистрироваться");
+        return;
+      }
+      setDone(true);
+      if (payload.mocked && payload.confirmUrl) {
+        setDevLink(payload.confirmUrl);
+        toast.message("SMTP не настроен — используйте ссылку на экране");
+      } else {
+        toast.success("Письмо отправлено. Проверьте почту.");
+      }
+    } catch {
+      toast.error("Сервер почты не ответил. Попробуйте ещё раз через минуту.");
+    } finally {
+      setSubmitting(false);
     }
   }
 

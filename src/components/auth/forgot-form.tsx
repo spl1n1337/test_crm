@@ -21,26 +21,32 @@ export function ForgotForm() {
 
   async function onSubmit(values: ForgotPasswordInput) {
     setSubmitting(true);
-    const response = await fetch("/api/auth/forgot", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(values),
-    });
-    const payload = (await response.json()) as {
-      error?: string;
-      mocked?: boolean;
-      confirmUrl?: string;
-    };
-    setSubmitting(false);
-    if (!response.ok) {
-      toast.error(payload.error ?? "Не удалось отправить письмо");
-      return;
+    try {
+      const response = await fetch("/api/auth/forgot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
+        signal: AbortSignal.timeout(20_000),
+      });
+      const payload = (await response.json()) as {
+        error?: string;
+        mocked?: boolean;
+        confirmUrl?: string;
+      };
+      if (!response.ok) {
+        toast.error(payload.error ?? "Не удалось отправить письмо");
+        return;
+      }
+      setDone(true);
+      if (payload.mocked && payload.confirmUrl) {
+        setDevLink(payload.confirmUrl);
+      }
+      toast.success("Если такой аккаунт есть, мы отправили письмо");
+    } catch {
+      toast.error("Сервер почты не ответил. Попробуйте ещё раз через минуту.");
+    } finally {
+      setSubmitting(false);
     }
-    setDone(true);
-    if (payload.mocked && payload.confirmUrl) {
-      setDevLink(payload.confirmUrl);
-    }
-    toast.success("Если такой аккаунт есть, мы отправили письмо");
   }
 
   if (done) {

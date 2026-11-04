@@ -31,31 +31,37 @@ export function ChangePasswordForm() {
       return;
     }
 
-    const response = await fetch("/api/auth/password-change", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify(values),
-    });
-    const payload = (await response.json()) as {
-      error?: string;
-      mocked?: boolean;
-      confirmUrl?: string;
-    };
-    setSubmitting(false);
-    if (!response.ok) {
-      toast.error(payload.error ?? "Не удалось запросить смену пароля");
-      return;
+    try {
+      const response = await fetch("/api/auth/password-change", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(values),
+        signal: AbortSignal.timeout(20_000),
+      });
+      const payload = (await response.json()) as {
+        error?: string;
+        mocked?: boolean;
+        confirmUrl?: string;
+      };
+      if (!response.ok) {
+        toast.error(payload.error ?? "Не удалось запросить смену пароля");
+        return;
+      }
+      form.reset();
+      if (payload.mocked && payload.confirmUrl) {
+        setDevLink(payload.confirmUrl);
+        toast.message("SMTP не настроен — откройте ссылку ниже");
+        return;
+      }
+      toast.success("Письмо отправлено. Подтвердите смену пароля по ссылке.");
+    } catch {
+      toast.error("Сервер почты не ответил. Попробуйте ещё раз через минуту.");
+    } finally {
+      setSubmitting(false);
     }
-    form.reset();
-    if (payload.mocked && payload.confirmUrl) {
-      setDevLink(payload.confirmUrl);
-      toast.message("SMTP не настроен — откройте ссылку ниже");
-      return;
-    }
-    toast.success("Письмо отправлено. Подтвердите смену пароля по ссылке.");
   }
 
   return (
