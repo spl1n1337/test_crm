@@ -16,11 +16,12 @@ export class MailService {
     return this.config.get<string>("RESEND_API_KEY")?.trim() || "";
   }
 
+  private smtpConfigured() {
+    return Boolean(this.config.get("SMTP_HOST") && this.config.get("SMTP_USER") && this.config.get("SMTP_PASS"));
+  }
+
   private isConfigured() {
-    return Boolean(
-      this.resendKey() ||
-        (this.config.get("SMTP_HOST") && this.config.get("SMTP_USER") && this.config.get("SMTP_PASS")),
-    );
+    return Boolean(this.resendKey() || this.smtpConfigured());
   }
 
   private transporter(port: number, secure: boolean) {
@@ -67,37 +68,41 @@ export class MailService {
       return { mocked: true as const, confirmUrl: input.urlForMock };
     }
 
+    if (this.smtpConfigured()) {
+      const configuredPort = Number(this.config.get("SMTP_PORT") || 587);
+      const attempts = [
+        { port: configuredPort, secure: this.config.get("SMTP_SECURE") === "true" || configuredPort === 465 },
+        { port: 465, secure: true },
+      ].filter(
+        (attempt, index, list) =>
+          list.findIndex((item) => item.port === attempt.port && item.secure === attempt.secure) === index,
+      );
+
+      const mail = {
+        from: this.config.get("SMTP_FROM") || this.config.get("SMTP_USER"),
+        to: input.to,
+        subject: input.subject,
+        html: input.html,
+      };
+
+      for (const attempt of attempts) {
+        try {
+          await this.transporter(attempt.port, attempt.secure).sendMail(mail);
+          return { mocked: false as const };
+        } catch (error) {
+          this.logger.warn(
+            `SMTP ${attempt.port}/${attempt.secure ? "ssl" : "starttls"} failed: ${error instanceof Error ? error.message : error}`,
+          );
+        }
+      }
+    }
+
     if (this.resendKey()) {
       await this.sendViaResend(input);
       return { mocked: false as const };
     }
 
-    const configuredPort = Number(this.config.get("SMTP_PORT") || 587);
-    const attempts = [
-      { port: configuredPort, secure: this.config.get("SMTP_SECURE") === "true" || configuredPort === 465 },
-      { port: 465, secure: true },
-    ].filter((attempt, index, list) => list.findIndex((item) => item.port === attempt.port && item.secure === attempt.secure) === index);
-
-    const mail = {
-      from: this.config.get("SMTP_FROM") || this.config.get("SMTP_USER"),
-      to: input.to,
-      subject: input.subject,
-      html: input.html,
-    };
-
-    let lastError: unknown;
-    for (const attempt of attempts) {
-      try {
-        await this.transporter(attempt.port, attempt.secure).sendMail(mail);
-        return { mocked: false as const };
-      } catch (error) {
-        lastError = error;
-        this.logger.warn(`SMTP ${attempt.port}/${attempt.secure ? "ssl" : "starttls"} failed: ${error instanceof Error ? error.message : error}`);
-      }
-    }
-
-    const text = lastError instanceof Error ? lastError.message : String(lastError);
-    throw new Error(`Не удалось отправить письмо (${text}). На бесплатном Render исходящий SMTP часто блокируется.`);
+    throw new Error("Не удалось отправить письмо. Проверьте SMTP на сервере.");
   }
 
   async sendConfirmationEmail(input: { to: string; name: string; confirmUrl: string }) {
