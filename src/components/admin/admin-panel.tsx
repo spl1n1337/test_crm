@@ -51,31 +51,36 @@ export function AdminPanel({
 
   useEffect(() => {
     function onTask(event: Event) {
-      const row = (event as CustomEvent<{ task?: Partial<TaskRow> & { id?: string; status?: TaskStatus } }>)
-        .detail?.task;
-      if (!row?.id || !row.status) return;
+      const row = (event as CustomEvent<{ task?: Partial<TaskRow> }>).detail?.task;
+      const id = row?.id;
+      const status = row?.status;
+      if (!id || !status) return;
+      const title = row.title;
+      const updatedAt = row.updated_at ?? new Date().toISOString();
+      const assigneeId = row.assignee_id ?? "";
+      const object = row.object ?? null;
       setLiveTasks((current) => {
-        const exists = current.some((task) => task.id === row.id);
+        const exists = current.some((task) => task.id === id);
         if (!exists) {
           return [
             {
-              id: row.id,
-              title: row.title ?? "Задача",
-              status: row.status,
-              updated_at: row.updated_at ?? new Date().toISOString(),
-              assignee_id: row.assignee_id ?? "",
-              object: row.object ?? null,
+              id,
+              title: title ?? "Задача",
+              status,
+              updated_at: updatedAt,
+              assignee_id: assigneeId,
+              object,
             },
             ...current,
           ];
         }
         return current.map((task) =>
-          task.id === row.id
+          task.id === id
             ? {
                 ...task,
-                status: row.status!,
-                title: row.title ?? task.title,
-                updated_at: row.updated_at ?? new Date().toISOString(),
+                status,
+                title: title ?? task.title,
+                updated_at: updatedAt,
               }
             : task,
         );

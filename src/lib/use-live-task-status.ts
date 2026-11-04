@@ -25,9 +25,9 @@ export function useLiveTaskStatus(taskId: string | undefined, initial: TaskStatu
     if (!taskId) return;
 
     function onTask(event: Event) {
-      const payload = (event as CustomEvent<LiveTaskPayload>).detail;
-      if (payload?.task?.id !== taskId || !isTaskStatus(payload.task.status)) return;
-      setStatus(payload.task.status);
+      const task = (event as CustomEvent<LiveTaskPayload>).detail?.task;
+      if (!task || task.id !== taskId || !isTaskStatus(task.status)) return;
+      setStatus(task.status);
     }
 
     window.addEventListener("crm:task", onTask);
