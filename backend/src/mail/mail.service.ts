@@ -12,8 +12,15 @@ export class MailService {
 
   constructor(private readonly config: ConfigService) {}
 
+  private resendKey() {
+    return this.config.get<string>("RESEND_API_KEY")?.trim() || "";
+  }
+
   private isConfigured() {
-    return Boolean(this.config.get("SMTP_HOST") && this.config.get("SMTP_USER") && this.config.get("SMTP_PASS"));
+    return Boolean(
+      this.resendKey() ||
+        (this.config.get("SMTP_HOST") && this.config.get("SMTP_USER") && this.config.get("SMTP_PASS")),
+    );
   }
 
   private transporter(port: number, secure: boolean) {
@@ -31,10 +38,38 @@ export class MailService {
     });
   }
 
+  private async sendViaResend(input: { to: string; subject: string; html: string }) {
+    const from =
+      this.config.get<string>("RESEND_FROM")?.trim() || "СтройCRM <onboarding@resend.dev>";
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.resendKey()}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from,
+        to: [input.to],
+        subject: input.subject,
+        html: input.html,
+      }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(`Resend ${response.status}: ${body}`);
+    }
+  }
+
   private async send(input: { to: string; subject: string; html: string; urlForMock: string }) {
     if (!this.isConfigured()) {
       this.logger.warn(`SMTP is not configured. URL: ${input.urlForMock}`);
       return { mocked: true as const, confirmUrl: input.urlForMock };
+    }
+
+    if (this.resendKey()) {
+      await this.sendViaResend(input);
+      return { mocked: false as const };
     }
 
     const configuredPort = Number(this.config.get("SMTP_PORT") || 587);
