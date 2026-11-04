@@ -7,27 +7,38 @@ on:
       - "backend/**"
       - "deploy/**"
       - ".github/workflows/deploy-api.yml"
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Pull and restart Nest on VPS
-        uses: appleboy/ssh-action@v1.2.2
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: 22
-          script_stop: true
-          script: |
-            set -euo pipefail
-            cd /opt/stroycrm
-            git fetch origin main
-            git reset --hard origin/main
-            cd backend
-            npm ci --include=dev
-            npm run build
-            systemctl restart stroycrm-api
-            sleep 2
-            curl -fsS http://127.0.0.1:3001/api/health
+      - name: Deploy Nest over SSH
+        env:
+          HOST: ${{ secrets.VPS_HOST }}
+          SSH_USER: ${{ secrets.VPS_USER }}
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          if printf '%s' "$SSH_KEY" | grep -q "BEGIN"; then
+            printf '%s\n' "$SSH_KEY" > ~/.ssh/vps
+          else
+            printf '%s' "$SSH_KEY" | base64 -d > ~/.ssh/vps
+          fi
+          chmod 600 ~/.ssh/vps
+          ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts
+          ssh -i ~/.ssh/vps -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            "$SSH_USER@$HOST" bash -s <<'REMOTE'
+          set -euo pipefail
+          cd /opt/stroycrm
+          git fetch origin main
+          git reset --hard origin/main
+          cd backend
+          npm ci --include=dev
+          npm run build
+          systemctl restart stroycrm-api
+          sleep 2
+          curl -fsS http://127.0.0.1:3001/api/health
+          REMOTE
